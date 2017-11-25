@@ -1,0 +1,145 @@
+---
+title: "Step 1 Data Prep"
+author: "Linda Grey-Noble, ID# 500798241"
+date: "November 19, 2017"
+output: word_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+Data Cleaning
+```{r, echo = FALSE}
+#note: leveraging packages 'tm', 'linkim', & 'stringr' for some cleaning activities
+#install.packages('stringr')
+#install.packages('tm')
+#install.packages('linkim')
+
+library(tm)
+library(linkim)
+library(stringr)
+
+
+#upload raw data
+twitter_data_raw <- read.csv("C:\\Users\\Linda\\Documents\\Ryerson\\CKME136\\Original Data\\gender-classifier-DFE-791531.csv")
+
+str(twitter_data_raw)
+
+#change column names
+colnames(twitter_data_raw)[which(names(twitter_data_raw) == "X_unit_id")] <- "unit_id"
+colnames(twitter_data_raw)[which(names(twitter_data_raw) == "X_golden")] <- "golden"
+colnames(twitter_data_raw)[which(names(twitter_data_raw) == "X_unit_state")] <- "unit_state"
+colnames(twitter_data_raw)[which(names(twitter_data_raw) == "X_trusted_judgments")] <- "trusted_judgments"
+colnames(twitter_data_raw)[which(names(twitter_data_raw) == "X_last_judgment_at")] <- "last_judgment_at"
+colnames(twitter_data_raw)[which(names(twitter_data_raw) == "gender.confidence")] <- "gender_confidence"
+colnames(twitter_data_raw)[which(names(twitter_data_raw) == "profile_yn.confidence")] <- "profile_yn_confidence"
+
+str(twitter_data_raw)
+
+#remove records where gender is blank or unknown
+twitter_data_clean <- twitter_data_raw[twitter_data_raw$gender %in% c("male","female","brand"),]
+
+str(twitter_data_clean)
+#gender field is still showing 5 factors (blanks "" and "unknown") --> change field to character then back to factor to remove these 'ghost' factors
+twitter_data_clean$gender <- as.factor(as.character(twitter_data_clean$gender))
+str(twitter_data_clean)
+
+#check for any invalid sidebar_color values (not a HEX color code - i.e. > 6 characters)
+twitter_data_clean[str_length(twitter_data_clean$sidebar_color) > 6,]
+
+#there are 7 rows with invalid sidebar_color codes that need to be removed from the data
+twitter_data_clean <- twitter_data_clean[str_length(twitter_data_clean$sidebar_color) <= 6,]
+
+```
+
+Data Prep
+```{r, echo = FALSE}
+#create 'clean tweet' field to be used for analysis
+twitter_data_clean$tweet_clean <- twitter_data_clean$text
+
+#create field that is a combination of the description and text fields but for tokenization exercise
+twitter_data_clean$desc_text <- paste(twitter_data_clean$description, twitter_data_clean$text, sep = " ")
+
+#create function to excludes URLs, hashtags (#), @people, punctuation & non-alphanumeric characters 
+clean_text <- function(x)
+{
+  x <- gsub('(f|ht)(tp)(s?)(://)(.*)[.|/](.*)',' ', x)
+  x <- gsub('#\\w+',' ', x)
+  x <- gsub('@\\w+',' ', x)
+  x <- str_replace_all(x, '[^a-zA-Z0-9 ]','')
+  x <- gsub('  ',' ',x)
+}
+
+#apply to fields tweet_clean and desc_text
+twitter_data_clean$tweet_clean <- clean_text(twitter_data_clean$tweet_clean)
+twitter_data_clean$desc_text <- clean_text(twitter_data_clean$desc_text)
+
+#from desc_text field remove numbers, stop-words and make lower case
+clean_desc_text <- function (x)
+{
+  x <- removeNumbers(x)
+  x <- str_to_lower(x,locale = "en")
+  x <- removeWords(x, stopwords("english"))
+}
+
+twitter_data_clean$desc_text <- clean_desc_text(twitter_data_clean$desc_text)
+
+#create field showing if how many numbers were used in the tweet text (exccluding URLs/hashtags/@people)
+twitter_data_clean$num_count <- str_count(twitter_data_clean$tweet_clean,'[0-9]') 
+
+#create field of just hashtag references in the tweets (text field) & make lower case
+twitter_data_clean$hashtag <- str_extract_all(twitter_data_clean$text, '#\\S+')
+twitter_data_clean$hashtag <- str_to_lower(twitter_data_clean$hashtag,locale = "en")
+twitter_data_clean$hashtag <- str_replace_all(twitter_data_clean$hashtag,'character[(]0[])]','')
+twitter_data_clean$hashtag <- str_replace_all(twitter_data_clean$hashtag,'c[(]','')
+twitter_data_clean$hashtag <- str_replace_all(twitter_data_clean$hashtag,'[^a-zA-Z0-9 ]','')
+
+#create field counting hashtags
+twitter_data_clean$hashtag_count <- str_count(twitter_data_clean$text, '#\\S+')
+
+#create field counting @people references
+twitter_data_clean$user_refs <- str_count(twitter_data_clean$text, '@\\S+')
+
+#create field counting URL references
+twitter_data_clean$url_count <- str_count(twitter_data_clean$text,'(f|ht)(tp)(s?)(://)(.*)[.|/](.*)')
+
+#create field showing the character count of the tweet text (excluding URLs/hashtags/@people)
+twitter_data_clean$text_chars <- str_length(twitter_data_clean$tweet_clean)
+
+#create field showing the word count of the tweet text (excluding URLs/hashtags/@people)
+twitter_data_clean$text_words <- str_count(twitter_data_clean$tweet_clean, '\\w+')
+
+#create fields indicating if all tweet text is capitalized (all_caps) or has no caps (no_caps) (excluding URLs/hashtags/@people)
+twitter_data_clean$text_char_count <- str_length(gsub('[^a-zA-Z]','',twitter_data_clean$tweet_clean))
+twitter_data_clean$text_cap_count <- str_length(gsub('[^A-Z]','',twitter_data_clean$tweet_clean))
+twitter_data_clean$all_caps <- ifelse(twitter_data_clean$text_char_count == 0, 0, ifelse(twitter_data_clean$text_cap_count == twitter_data_clean$text_char_count,1,0))
+twitter_data_clean$no_caps <- ifelse(twitter_data_clean$text_char_count == 0, 0, ifelse(twitter_data_clean$text_cap_count == 0,1,0))
+
+#count of explanation marks (!) within tweet
+twitter_data_clean$exclamations <- str_count(twitter_data_clean$text,'[!]')
+
+#take the sidebar_color hex codes and segment into colour groups using the 12 standard colour groups
+
+#upload colour group csv table
+hex_colours <- read.csv("C:\\Users\\Linda\\Documents\\Ryerson\\CKME136\\Original Data\\HEX_COLOURS.csv")
+
+#add a row that identifies the colour group for each sidebar_color
+twitter_data_clean <- merge(twitter_data_clean,hex_colours,by.x="sidebar_color", by.y="sidebar_color", all.x = TRUE)
+
+#for KNN model, will need to convert to binomial variables for each of the 12 colours
+twitter_data_clean$red <- ifelse(twitter_data_clean$COL_GROUP == "RED",1,0)
+twitter_data_clean$magenta <- ifelse(twitter_data_clean$COL_GROUP == "MAGENTA",1,0)
+twitter_data_clean$violet <- ifelse(twitter_data_clean$COL_GROUP == "VIOLET",1,0)
+twitter_data_clean$purple <- ifelse(twitter_data_clean$COL_GROUP == "PURPLE",1,0)
+twitter_data_clean$blue <- ifelse(twitter_data_clean$COL_GROUP == "BLUE",1,0)
+twitter_data_clean$cyan <- ifelse(twitter_data_clean$COL_GROUP == "CYAN",1,0)
+twitter_data_clean$green <- ifelse(twitter_data_clean$COL_GROUP == "GREEN",1,0)
+twitter_data_clean$yellow <- ifelse(twitter_data_clean$COL_GROUP == "YELLOW",1,0)
+twitter_data_clean$orange <- ifelse(twitter_data_clean$COL_GROUP == "ORANGE",1,0)
+twitter_data_clean$black <- ifelse(twitter_data_clean$COL_GROUP == "BLACK",1,0)
+twitter_data_clean$white <- ifelse(twitter_data_clean$COL_GROUP == "WHITE",1,0)
+twitter_data_clean$gray <- ifelse(twitter_data_clean$COL_GROUP == "GRAY",1,0)
+
+
+```

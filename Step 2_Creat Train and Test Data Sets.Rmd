@@ -1,0 +1,25 @@
+---
+title: "Step 2 Create Train/Test Data Sets"
+author: "Linda Grey-Noble, ID# 500798241"
+date: "November 19, 2017"
+output: word_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r, echo=TRUE}
+#create train and test data - test data will consist of two sets - test data where gender_confidence < 1and a set where gender confidence = 1 (10% of the 100% confidence data)
+twitter.test_lowcon <- twitter_data_clean[twitter_data_clean$gender_confidence < 1,]
+
+twitter_highcon <- twitter_data_clean[twitter_data_clean$gender_confidence == 1,]
+smp_size <- floor(0.9 * nrow(twitter_highcon))
+set.seed(123)
+train_ind <- sample(seq_len(nrow(twitter_highcon)), size = smp_size)
+
+twitter.train <- twitter_highcon[train_ind,]
+twitter.test_highcon <- twitter_highcon[-train_ind,]
+twitter.test <- merge(twitter.test_highcon, twitter.test_lowcon, all = TRUE)
+
+```

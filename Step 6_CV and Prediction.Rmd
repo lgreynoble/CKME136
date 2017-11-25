@@ -1,0 +1,130 @@
+---
+title: "Step 6 Model Selection using Cross Validation & Final Prediction"
+author: "Linda Grey-Noble, ID# 500798241"
+date: "November 19, 2017"
+output: word_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+Random Forest Prediction Model
+```{r, echo=FALSE}
+library(caret)
+set.seed(42)
+
+rf_prediction_model <- caret::train(gender ~ fav_number
+                                        + retweet_count
+                                        + tweet_count
+                                        + num_count
+                                        + hashtag_count
+                                        + user_refs
+                                        + url_count
+                                        + text_chars
+                                        + text_words
+                                        + all_caps
+                                        + no_caps
+                                        + exclamations
+                                        + COL_GROUP
+                                        + g_score_f
+                                        + g_score_m
+                                        + g_score_b
+                                        + hash_score_f
+                                        + hash_score_m
+                                        + hash_score_b,
+                             data = twitter.train, method = 'rf', weight = NULL,
+                             trControl = trainControl(
+                               method = "cv", number = 10,
+                               verboseIter = TRUE
+                             )
+                              )
+
+rf_prediction_model
+
+#sampling results selected with 0.7299890 accuracy
+
+```
+K-Nearest Neighbours Prediction Model
+```{r, echo=FALSE}
+knn_prediction_model <- caret::train(gender ~ fav_number
+                                        + retweet_count
+                                        + tweet_count
+                                        + num_count
+                                        + hashtag_count
+                                        + user_refs
+                                        + url_count
+                                        + text_chars
+                                        + text_words
+                                        + all_caps
+                                        + no_caps
+                                        + exclamations
+                                        + COL_GROUP
+                                        + g_score_f
+                                        + g_score_m
+                                        + g_score_b
+                                        + hash_score_f
+                                        + hash_score_m
+                                        + hash_score_b,
+                             data = twitter.train, method = 'kknn', weight = NULL,
+                             trControl = trainControl(
+                               method = "cv", number = 10,
+                               verboseIter = TRUE
+                             )
+                              )
+
+knn_prediction_model
+
+#results of CV model resulted in 0.6218395 accurracy
+
+```
+
+Support Vector Machine (SVM) with Linear Kernel Prediction Model
+```{r, echo=FALSE}
+
+svmlinear_prediction_model <- caret::train(gender ~ fav_number
+                                        + retweet_count
+                                        + tweet_count
+                                        + num_count
+                                        + hashtag_count
+                                        + user_refs
+                                        + url_count
+                                        + text_chars
+                                        + text_words
+                                        + all_caps
+                                        + no_caps
+                                        + exclamations
+                                        + COL_GROUP
+                                        + g_score_f
+                                        + g_score_m
+                                        + g_score_b
+                                        + hash_score_f
+                                        + hash_score_m
+                                        + hash_score_b,
+                             data = twitter.train, method = 'svmLinear', weight = NULL,
+                             trControl = trainControl(
+                               method = "cv", number = 10,
+                               verboseIter = TRUE
+                             )
+                              )
+
+svmlinear_prediction_model
+
+#results of CV model resulted in 0.7367552 accuracy
+                             
+```
+
+Prediction Model
+#based on the accuracy found of the 3 models considered, the SVM model will be used for the prediction as it had the highest accuracy:
+# Random Forest: 0.7299890
+# KNN: 0.6218395
+# SVM: 0.7367552
+
+```{r, echo=FALSE}
+predict.highcon <- predict(svmlinear_prediction_model,twitter.test_highcon)
+table(predict.highcon, twitter.test_highcon$gender)
+```
+```{r, echo=FALSE}
+predict.lowcon <- predict(svmlinear_prediction_model,twitter.test_lowcon)
+table(predict.lowcon, twitter.test_lowcon$gender)
+```

@@ -1,0 +1,81 @@
+---
+title: "Step 5 Add Lexicon Scores"
+author: "Linda Grey-Noble, ID# 500798241"
+date: "November 19, 2017"
+output: word_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r, echo=TRUE}
+#leveraging stringr and plyr packages
+library(stringr)
+library(plyr)
+
+#create vectors for the gender lexicon for each of the genders (both words and hashtags)
+lexicon.gender.vector <- function (df,gender)
+{
+  c <- as.vector(df[gender == 1,1])
+  return(c)
+}
+
+lex_female <- lexicon.gender.vector(gender_lexicon,gender_lexicon$female)
+lex_male <- lexicon.gender.vector(gender_lexicon,gender_lexicon$male)
+lex_brand <- lexicon.gender.vector(gender_lexicon,gender_lexicon$brand)
+
+lex_hash_female <- lexicon.gender.vector(hashtag_lexicon,hashtag_lexicon$female)
+lex_hash_male <- lexicon.gender.vector(hashtag_lexicon,hashtag_lexicon$male)
+lex_hash_brand <- lexicon.gender.vector(hashtag_lexicon,hashtag_lexicon$brand)
+
+#create a function to create a gender score for the desc_text and hashtags data for each record
+score <- function(text_blocks, lexicon, .progress = 'none')
+{
+  scores <- laply(text_blocks, 
+                  function(text_block, lexicon)
+                  {
+                    words <- unlist(str_split(text_block, '\\s+'))
+                    matches <- !is.na(match(words, lexicon))
+                    score <- sum(matches)
+                    return(score)
+                  },lexicon, .progress = .progress)
+  return(scores)
+}
+
+#add to train data set
+twitter.train$g_score_f <- score(twitter.train$desc_text,lex_female)
+twitter.train$g_score_m <- score(twitter.train$desc_text,lex_male)
+twitter.train$g_score_b <- score(twitter.train$desc_text,lex_brand)
+
+twitter.train$hash_score_f <- score(twitter.train$hashtag,lex_hash_female)
+twitter.train$hash_score_m <- score(twitter.train$hashtag,lex_hash_male)
+twitter.train$hash_score_b <- score(twitter.train$hashtag,lex_hash_brand)
+
+#add to test datasets
+
+twitter.test$g_score_f <- score(twitter.test$desc_text,lex_female)
+twitter.test$g_score_m <- score(twitter.test$desc_text,lex_male)
+twitter.test$g_score_b <- score(twitter.test$desc_text,lex_brand)
+
+twitter.test$hash_score_f <- score(twitter.test$hashtag,lex_hash_female)
+twitter.test$hash_score_m <- score(twitter.test$hashtag,lex_hash_male)
+twitter.test$hash_score_b <- score(twitter.test$hashtag,lex_hash_brand)
+
+twitter.test_highcon$g_score_f <- score(twitter.test_highcon$desc_text,lex_female)
+twitter.test_highcon$g_score_m <- score(twitter.test_highcon$desc_text,lex_male)
+twitter.test_highcon$g_score_b <- score(twitter.test_highcon$desc_text,lex_brand)
+
+twitter.test_highcon$hash_score_f <- score(twitter.test_highcon$hashtag,lex_hash_female)
+twitter.test_highcon$hash_score_m <- score(twitter.test_highcon$hashtag,lex_hash_male)
+twitter.test_highcon$hash_score_b <- score(twitter.test_highcon$hashtag,lex_hash_brand)
+
+twitter.test_lowcon$g_score_f <- score(twitter.test_lowcon$desc_text,lex_female)
+twitter.test_lowcon$g_score_m <- score(twitter.test_lowcon$desc_text,lex_male)
+twitter.test_lowcon$g_score_b <- score(twitter.test_lowcon$desc_text,lex_brand)
+
+twitter.test_lowcon$hash_score_f <- score(twitter.test_lowcon$hashtag,lex_hash_female)
+twitter.test_lowcon$hash_score_m <- score(twitter.test_lowcon$hashtag,lex_hash_male)
+twitter.test_lowcon$hash_score_b <- score(twitter.test_lowcon$hashtag,lex_hash_brand)
+
+```

@@ -1,0 +1,178 @@
+---
+title: "Step 4 Hashtag Lexicon"
+author: "Linda Grey-Noble, ID# 500798241"
+date: "November 19, 2017"
+output: word_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+Create list of words (tokens) to be considered for each of the gender's lexicons
+```{r, echo=TRUE}
+#Extract hashtag lexicon from data set --> same code as the gender lexicon with slight modifications
+
+#Note: leveraging the 'tm' & 'linkim' packages for this analysis
+#install.packages('tm')
+#install.packages('linkim')
+
+#library(tm)
+#library(linkim)
+
+
+#create a corpus of the words in the hashtag field for each train dataframe
+#use the create_corpus function created previously
+corpus_train <- create_corpus(twitter.train$hashtag)
+corpus_train_female <- create_corpus(train_female$hashtag)
+corpus_train_male <- create_corpus(train_male$hashtag)
+corpus_train_brand <- create_corpus(train_brand$hashtag)
+
+#create term document matrix for each train corpus
+#use the tdm_matrix function created previously
+tdm_train <- as.matrix(tdm_matrix(corpus_train))
+tdm_train_female <- as.matrix(tdm_matrix(corpus_train_female))
+tdm_train_male <- as.matrix(tdm_matrix(corpus_train_male))
+tdm_train_brand <- as.matrix(tdm_matrix(corpus_train_brand))
+
+#create a dataframe that lists all tokens identified in the description/text field and the count of records it appears in
+word_freq <- data.frame(token = rownames(tdm_train),
+                        freq = rowSums(tdm_train >= 1),
+                        rec.share = rowSums(tdm_train >= 1)/rowSums(tdm_train >=0),
+                        row.names = NULL)
+
+
+#create a dataframe providing the frequency list for each word in each tdm matrix
+#use the frequency_df function created for the gender lexicon model
+freq_female <- frequency_df(tdm_train_female)
+freq_male <- frequency_df(tdm_train_male)
+freq_brand <- frequency_df(tdm_train_brand)
+
+#add usage count by gender to word_freq (one column of counts per gender plus total column)
+colnames(freq_female) <- c("token","count_f")
+colnames(freq_male) <- c("token","count_m")
+colnames(freq_brand) <- c("token","count_b")
+
+word_freq <- merge(word_freq,freq_female, by.x="token", by.y="token", all.x = TRUE)
+word_freq <- merge(word_freq,freq_male, by.x="token", by.y="token", all.x = TRUE)
+word_freq <- merge(word_freq,freq_brand, by.x="token", by.y="token", all.x = TRUE)
+
+
+#replace NA frequencies with 0
+c <- is.na(word_freq$count_f)
+word_freq$count_f[c] <- 0
+c <- is.na(word_freq$count_m)
+word_freq$count_m[c] <- 0
+c <- is.na(word_freq$count_b)
+word_freq$count_b[c] <- 0
+
+#create total column
+word_freq$count_tot <- word_freq$count_f + word_freq$count_m + word_freq$count_b
+```
+
+Feature selection for tokens
+#Reduce list of tokens to only those that are relevant
+```{r, echo = FALSE}
+#create copy of word_freq for feature selection / manipulation
+word_freq_fs <- word_freq
+
+#Remove all tokens that appear in 60% or more of all records (across all genders)
+#NO hashtags are in more than 60% of all tweets
+word_freq_fs[word_freq_fs$rec.share >= 0.6,]
+
+word_freq_fs <- word_freq_fs[word_freq_fs$rec.share < 0.6,]
+
+
+#Remove all tokens that only appear 1 to 3 times across all genders (i.e. freq_tot <= 3)
+word_freq_fs <- word_freq_fs[word_freq_fs$freq > 3,]
+
+
+#Normalize word counts by calculating share of word frequency by gender
+word_freq_fs$count_f_share <- word_freq_fs$count_f / word_freq_fs$count_tot
+word_freq_fs$count_m_share <- word_freq_fs$count_m / word_freq_fs$count_tot
+word_freq_fs$count_b_share <- word_freq_fs$count_b / word_freq_fs$count_tot
+```
+
+Develop Binary Code that will identify which words are associated with each gender's lexicon
+```{r, echo = FALSE}
+#develop a binary code to create the lexicon function (f = 4, m = 2, b = 1)
+
+#create fields for binary calculations (1 for each gender)
+word_freq_fs$binary_f <- 0
+word_freq_fs$binary_m <- 0
+word_freq_fs$binary_b <- 0
+
+#add 1 for to specific gender were share of frequency >= 70%
+word_freq_fs$binary_f <- ifelse(word_freq_fs$count_f_share >= 0.70,1,0)
+word_freq_fs$binary_m <- ifelse(word_freq_fs$count_m_share >= 0.70,1,0)
+word_freq_fs$binary_b <- ifelse(word_freq_fs$count_b_share >= 0.70,1,0)
+
+#add 1 for ALL genders when all 3 genders have a frequency between 30% and 35%
+a <- 0.30
+b <- 0.35
+
+word_freq_fs$binary_f <- ifelse (word_freq_fs$binary_f == 1, 1,
+                                 ifelse(((word_freq_fs$count_f_share >= a & word_freq_fs$count_f_share <= b) 
+                                         & (word_freq_fs$count_m_share >= a & word_freq_fs$count_m_share <= b) 
+                                         & (word_freq_fs$count_b_share >= a & word_freq_fs$count_b_share <= b)),
+                                        1,0))
+word_freq_fs$binary_m <- ifelse (word_freq_fs$binary_m == 1, 1,
+                                 ifelse(((word_freq_fs$count_f_share >= a & word_freq_fs$count_f_share <= b) 
+                                         & (word_freq_fs$count_m_share >= a & word_freq_fs$count_m_share <= b) 
+                                         & (word_freq_fs$count_b_share >= a & word_freq_fs$count_b_share <= b)),
+                                        1,0))
+word_freq_fs$binary_b <- ifelse (word_freq_fs$binary_b == 1, 1,
+                                 ifelse(((word_freq_fs$count_f_share >= a & word_freq_fs$count_f_share <= b) 
+                                         & (word_freq_fs$count_m_share >= a & word_freq_fs$count_m_share <= b) 
+                                         & (word_freq_fs$count_b_share >= a & word_freq_fs$count_b_share <= b)),
+                                        1,0))
+
+#if two genders frequencies both are >= 35% AND combined >= 90% frequency, mark those two genders as 1 (other gender = 0)
+#use the gender.duo function created in word_lexicon model
+word_freq_fs$binary_f <- gender.duo(word_freq_fs$binary_f,word_freq_fs$count_f_share, word_freq_fs$count_m_share, word_freq_fs$count_b_share)
+word_freq_fs$binary_m <- gender.duo(word_freq_fs$binary_m,word_freq_fs$count_m_share, word_freq_fs$count_f_share, word_freq_fs$count_b_share)
+word_freq_fs$binary_b <- gender.duo(word_freq_fs$binary_b,word_freq_fs$count_b_share, word_freq_fs$count_m_share, word_freq_fs$count_f_share)
+
+#calculate lexicons binary value (will be how we keep track of what has been calculated and not)
+word_freq_fs$binary_val <- word_freq_fs$binary_f*4 + word_freq_fs$binary_m*2 + word_freq_fs$binary_b*1
+
+#create multinomial logistic regression model to determine remainder of binary_val values
+#require packages "nnet" to build the multinomial logit model
+#install.packages('nnet')
+
+library(nnet)
+
+#create temp dataframe with the records where the binary_val value has been determined (c) and not determined (d)
+c <- word_freq_fs[word_freq_fs$binary_val != 0,]
+d <- word_freq_fs[word_freq_fs$binary_val == 0,]
+
+#use the logit.binary_val model created previously using the dataframes (c) and (d) above
+summary(logit.binary_val)
+
+#predict on remaining words in lexicon
+predict.binary_val <- predict(logit.binary_val,d)
+head(predict.binary_val)
+
+d$binary_val<- predict(logit.binary_val,d)
+
+#determine the binary values for f, m and b in (d)
+d$binary_f <- ifelse((d$binary_val == 4)|(d$binary_val == 6)|(d$binary_val == 5)|(d$binary_val == 7),1,0)
+d$binary_m <- ifelse((d$binary_val == 2)|(d$binary_val == 3)|(d$binary_val == 6)|(d$binary_val == 7),1,0)
+d$binary_b <- ifelse((d$binary_val == 1)|(d$binary_val == 3)|(d$binary_val == 5)|(d$binary_val == 7),1,0)
+
+#you can see that the binary_values in (d) are now consistent with the shares
+head(d)
+
+#combine c and d as word_freq_fs
+word_freq_fs <- rbind(c,d)
+```
+
+Hashtag Word Lexicon
+```{r, echo = FALSE}
+#create master word lexicon for gender-identifying twitter words
+hashtag_lexicon <- data.frame(token = word_freq_fs$token,
+                              female = word_freq_fs$binary_f,
+                              male = word_freq_fs$binary_m,
+                              brand = word_freq_fs$binary_b,
+                             row.names = NULL)
+```
